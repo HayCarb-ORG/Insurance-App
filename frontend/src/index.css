@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+	font-family: 'IBM Plex Sans', sans-serif;
+	color-scheme: only light;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background-color: #0a0f0b;
+}
+
+#root {
+	min-height: 100vh;
+}
+
+.app-background {
+	background-image:
+		linear-gradient(125deg, rgba(5, 12, 8, 0.86), rgba(13, 77, 46, 0.64)),
+		url('./assets/office-srilanka-modified.png');
+	background-position: center;
+	background-size: cover;
+	background-attachment: fixed;
+}

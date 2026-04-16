@@ -1,0 +1,12 @@
+{
+  "name": "insurance-electron",
+  "version": "1.0.0",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^36.3.2"
+  }
+}
