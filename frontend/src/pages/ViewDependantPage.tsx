@@ -49,9 +49,11 @@ export const ViewDependantPage = ({ session, onNotify }: ViewDependantPageProps)
     try {
       await updateRecord(dependant.id, {
         name: dependant.name,
+        nic: dependant.nic,
         relation: dependant.relation,
         dob: dependant.dob,
         gender: dependant.gender,
+        userEmail: session.email,
       })
       onNotify('Dependant updated.', 'success')
       navigate('/dependants')
@@ -88,9 +90,8 @@ export const ViewDependantPage = ({ session, onNotify }: ViewDependantPageProps)
             onChange={(v) => setField('relation', v)}
             options={[
               { label: 'Spouse', value: 'Spouse' },
-              { label: 'Child', value: 'Child' },
-              { label: 'Parent', value: 'Parent' },
-              { label: 'Other', value: 'Other' },
+              { label: 'Son', value: 'Son' },
+              { label: 'Daughter', value: 'Daughter' },
             ]}
           />
           <InputField label="DOB" type="date" value={dependant.dob} onChange={(v) => setField('dob', v)} />

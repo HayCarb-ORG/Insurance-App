@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
 Gender = Literal['Male', 'Female', 'Other']
+DependantRelation = Literal['Spouse', 'Son', 'Daughter']
 
 
 class AuthResponse(BaseModel):
@@ -21,6 +22,7 @@ class SheRecord(BaseModel):
     effectiveDate: str
     grade: str
     totalPremium: float
+    employeeVoluntaryEnhanceLimit: float = 0
     note: Optional[str] = ''
 
 
@@ -32,21 +34,24 @@ class SheResponse(BaseModel):
 class DependantCreateRequest(BaseModel):
     name: str = Field(min_length=1)
     nic: str = Field(min_length=1)
-    relation: str = Field(min_length=1)
+    relation: DependantRelation
     dob: str = Field(min_length=1)
     gender: Gender
+    userEmail: Optional[str] = None
 
 
 class RecordUpdateRequest(BaseModel):
     name: Optional[str] = None
-    relation: Optional[str] = None
+    relation: Optional[DependantRelation] = None
     dob: Optional[str] = None
     gender: Optional[Gender] = None
     category: Optional[str] = None
     effectiveDate: Optional[str] = None
     grade: Optional[str] = None
     totalPremium: Optional[float] = None
+    employeeVoluntaryEnhanceLimit: Optional[float] = None
     note: Optional[str] = None
+    userEmail: Optional[str] = None
 
 
 class UserNoteCreateRequest(BaseModel):

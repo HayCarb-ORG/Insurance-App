@@ -22,6 +22,7 @@ export const AddDependantPage = ({ session, onNotify }: AddDependantPageProps) =
     relation: 'Spouse',
     dob: '',
     gender: 'Male',
+    userEmail: session.email,
   })
 
   const setValue = (key: keyof DependantPayload, value: string) => {
@@ -61,9 +62,8 @@ export const AddDependantPage = ({ session, onNotify }: AddDependantPageProps) =
             onChange={(v) => setValue('relation', v)}
             options={[
               { label: 'Spouse', value: 'Spouse' },
-              { label: 'Child', value: 'Child' },
-              { label: 'Parent', value: 'Parent' },
-              { label: 'Other', value: 'Other' },
+              { label: 'Son', value: 'Son' },
+              { label: 'Daughter', value: 'Daughter' },
             ]}
           />
           <InputField label="DOB" type="date" value={form.dob} onChange={(v) => setValue('dob', v)} />

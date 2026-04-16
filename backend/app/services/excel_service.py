@@ -121,7 +121,22 @@ def _ensure_files() -> None:
         wb = Workbook()
         ws = wb.active
         ws.title = 'SHE'
-        ws.append(['id', 'name', 'nic', 'dob', 'gender', 'relation', 'category', 'effectiveDate', 'grade', 'totalPremium', 'note'])
+        ws.append(
+            [
+                'id',
+                'name',
+                'nic',
+                'dob',
+                'gender',
+                'relation',
+                'category',
+                'effectiveDate',
+                'grade',
+                'totalPremium',
+                'employeeVoluntaryEnhanceLimit',
+                'note',
+            ]
+        )
         wb.save(SHE_PATH)
 
     _ensure_notes_file()
@@ -158,7 +173,8 @@ def _build_record_from_seeded(row_idx: int, row: tuple[object, ...]) -> dict | N
         'effectiveDate': _normalize_date(row[7]) if len(row) > 7 else '',
         'grade': _safe(row[8]) if len(row) > 8 else '',
         'totalPremium': _to_number(row[9]) if len(row) > 9 else 0.0,
-        'note': _safe(row[10]) if len(row) > 10 else '',
+        'employeeVoluntaryEnhanceLimit': _to_number(row[10]) if len(row) > 11 else 0.0,
+        'note': _safe(row[11]) if len(row) > 11 else (_safe(row[10]) if len(row) > 10 else ''),
     }
 
 
@@ -178,6 +194,7 @@ def _build_record_from_real(row_idx: int, row: tuple[object, ...]) -> dict | Non
         'effectiveDate': _normalize_date(row[6]) if len(row) > 6 else '',
         'grade': _safe(row[7]) if len(row) > 7 else '',
         'totalPremium': _to_number(row[12]) if len(row) > 12 else 0.0,
+        'employeeVoluntaryEnhanceLimit': _to_number(row[18]) if len(row) > 18 else 0.0,
         'note': _safe(row[26]) if len(row) > 26 else '',
     }
 
@@ -259,7 +276,8 @@ def create_dependant(payload: dict) -> str:
             ws.cell(row=new_row_index, column=8, value=payload.get('effectiveDate', ''))
             ws.cell(row=new_row_index, column=9, value=payload.get('grade', ''))
             ws.cell(row=new_row_index, column=10, value=payload.get('totalPremium', 0))
-            ws.cell(row=new_row_index, column=11, value=payload.get('note', ''))
+            ws.cell(row=new_row_index, column=11, value=payload.get('employeeVoluntaryEnhanceLimit', 0))
+            ws.cell(row=new_row_index, column=12, value=payload.get('note', ''))
             record_id = f'row-{new_row_index - 1}'
         else:
             ws.cell(row=new_row_index, column=1, value=payload['nic'])
@@ -271,6 +289,7 @@ def create_dependant(payload: dict) -> str:
             ws.cell(row=new_row_index, column=7, value=payload.get('effectiveDate', ''))
             ws.cell(row=new_row_index, column=8, value=payload.get('grade', ''))
             ws.cell(row=new_row_index, column=13, value=payload.get('totalPremium', 0))
+            ws.cell(row=new_row_index, column=19, value=payload.get('employeeVoluntaryEnhanceLimit', 0))
             ws.cell(row=new_row_index, column=27, value=payload.get('note', ''))
             record_id = f'she-{new_row_index}'
 
@@ -318,7 +337,8 @@ def update_record(record_id: str, payload: dict) -> bool:
             'effectiveDate': 8,
             'grade': 9,
             'totalPremium': 10,
-            'note': 11,
+            'employeeVoluntaryEnhanceLimit': 11,
+            'note': 12,
         }
         real_map = {
             'nic': 1,
@@ -330,6 +350,7 @@ def update_record(record_id: str, payload: dict) -> bool:
             'effectiveDate': 7,
             'grade': 8,
             'totalPremium': 13,
+            'employeeVoluntaryEnhanceLimit': 19,
             'note': 27,
         }
 
@@ -393,6 +414,41 @@ def submit_change_request(user_email: str, nic: str, target_record_id: str, chan
                 'CHANGE',
                 target_record_id.strip(),
                 json.dumps(changes),
+            ]
+        )
+
+        wb.save(NOTES_PATH)
+        wb.close()
+        return note_id
+
+
+def submit_dependant_notification(
+    user_email: str,
+    nic: str,
+    message: str,
+    target_record_id: str,
+    payload: dict,
+    request_type: str,
+) -> str:
+    with _sheet_lock:
+        _ensure_files()
+        wb = load_workbook(NOTES_PATH)
+        ws = wb.active
+
+        note_id = f'note-{ws.max_row}'
+        ws.append(
+            [
+                note_id,
+                datetime.now().isoformat(timespec='seconds'),
+                user_email.strip(),
+                nic.strip(),
+                message.strip(),
+                'NEW',
+                '',
+                '',
+                request_type.strip().upper(),
+                target_record_id.strip(),
+                json.dumps(payload),
             ]
         )
 

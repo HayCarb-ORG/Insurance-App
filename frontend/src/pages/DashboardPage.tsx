@@ -62,8 +62,10 @@ export const DashboardPage = ({ session, onNotify }: DashboardPageProps) => {
       requestedChanges.effectiveDate = employee.effectiveDate
     }
     if (employee.grade !== originalEmployee.grade) requestedChanges.grade = employee.grade
-    if (employee.totalPremium !== originalEmployee.totalPremium) {
-      requestedChanges.totalPremium = employee.totalPremium
+    const currentEnhanceLimit = Number(employee.employeeVoluntaryEnhanceLimit || 0)
+    const originalEnhanceLimit = Number(originalEmployee.employeeVoluntaryEnhanceLimit || 0)
+    if (currentEnhanceLimit !== originalEnhanceLimit) {
+      requestedChanges.employeeVoluntaryEnhanceLimit = currentEnhanceLimit
     }
 
     if (Object.keys(requestedChanges).length === 0) {
@@ -158,10 +160,10 @@ export const DashboardPage = ({ session, onNotify }: DashboardPageProps) => {
           />
           <InputField label="Grade" value={employee.grade} onChange={(v) => updateField('grade', v)} />
           <InputField
-            label="Total Premium"
+            label="Employee Voluntary Enhance Limit"
             type="number"
-            value={employee.totalPremium}
-            onChange={(v) => updateField('totalPremium', v)}
+            value={employee.employeeVoluntaryEnhanceLimit}
+            onChange={(v) => updateField('employeeVoluntaryEnhanceLimit', v)}
           />
         </div>
 

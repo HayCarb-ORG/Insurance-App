@@ -190,7 +190,7 @@ export const AdminPage = ({ session, onNotify }: AdminPageProps) => {
                 <p className="text-sm">NIC: {note.nic}</p>
                 <p className="mt-2">{note.message}</p>
                 <p className="mt-1 text-xs text-emerald-200">Type: {note.requestType || 'NOTE'}</p>
-                {note.requestType === 'CHANGE' ? (
+                {note.requestType === 'CHANGE' || note.requestType?.startsWith('DEPENDANT_') ? (
                   <div className="mt-2 rounded-md bg-black/20 p-2 text-xs">
                     {Object.entries(parsePayload(note.payloadJson)).map(([key, value]) => (
                       <p key={key}>

@@ -1,4 +1,5 @@
 export type Gender = 'Male' | 'Female' | 'Other'
+export type DependantRelation = 'Spouse' | 'Son' | 'Daughter'
 
 export interface UserSession {
   email: string
@@ -17,6 +18,7 @@ export interface SheRecord {
   effectiveDate: string
   grade: string
   totalPremium: number
+  employeeVoluntaryEnhanceLimit: number
   note?: string
 }
 
@@ -28,21 +30,24 @@ export interface SheResponse {
 export interface DependantPayload {
   name: string
   nic: string
-  relation: string
+  relation: DependantRelation
   dob: string
   gender: Gender
+  userEmail?: string
 }
 
 export interface UpdateRecordPayload {
   name?: string
-  relation?: string
+  relation?: DependantRelation
   dob?: string
   gender?: Gender
   category?: string
   effectiveDate?: string
   grade?: string
   totalPremium?: number
+  employeeVoluntaryEnhanceLimit?: number
   note?: string
+  userEmail?: string
 }
 
 export interface UserNotePayload {

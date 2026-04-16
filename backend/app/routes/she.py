@@ -10,6 +10,7 @@ from app.services.excel_service import (
     create_dependant,
     get_records_by_nic,
     submit_change_request,
+    submit_dependant_notification,
     submit_user_note,
     split_employee_dependants,
     update_record,
@@ -27,15 +28,39 @@ def she_by_nic(nic: str) -> SheResponse:
 
 @router.post('/dependant')
 def add_dependant(payload: DependantCreateRequest) -> dict:
-    record_id = create_dependant(payload.model_dump())
+    request_payload = payload.model_dump(exclude_none=True)
+    user_email = request_payload.pop('userEmail', '').strip() or 'unknown@user.local'
+    record_id = create_dependant(request_payload)
+    submit_dependant_notification(
+        user_email=user_email,
+        nic=payload.nic,
+        message='New dependant added by user. Please review.',
+        target_record_id=record_id,
+        payload=request_payload,
+        request_type='DEPENDANT_ADD',
+    )
     return {'id': record_id}
 
 
 @router.put('/{record_id}')
 def put_she_record(record_id: str, payload: RecordUpdateRequest) -> dict:
-    success = update_record(record_id, payload.model_dump(exclude_none=True))
+    request_payload = payload.model_dump(exclude_none=True)
+    user_email = request_payload.pop('userEmail', '').strip() or 'unknown@user.local'
+    nic = str(request_payload.get('nic', '')).strip()
+    success = update_record(record_id, request_payload)
     if not success:
         raise HTTPException(status_code=404, detail='Record not found.')
+
+    if request_payload:
+        submit_dependant_notification(
+            user_email=user_email,
+            nic=nic,
+            message='Dependant details corrected by user. Please review.',
+            target_record_id=record_id,
+            payload=request_payload,
+            request_type='DEPENDANT_UPDATE',
+        )
+
     return {'success': True}
 
 
