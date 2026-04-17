@@ -18,6 +18,7 @@ Thumbs.db
 
 # Build outputs
 dist/
+release-dist/
 
 # Electron builder outputs
 *.blockmap
