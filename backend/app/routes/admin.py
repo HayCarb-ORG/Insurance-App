@@ -8,10 +8,12 @@ from app.models import AdminNote, AdminNoteUpdateRequest, SheetPreviewResponse
 from app.services.excel_service import (
     clear_notes,
     delete_note,
+    get_oracle_file_path,
     get_she_file_path,
     get_sheet_preview,
     is_admin_email,
     list_notes,
+    replace_oracle_file,
     replace_she_file,
     resolve_note,
 )
@@ -75,6 +77,13 @@ def download_she_sheet(email: str) -> FileResponse:
     return FileResponse(path=she_path, filename='SHE.xlsx', media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+@router.get('/download/oracle')
+def download_oracle_sheet(email: str) -> FileResponse:
+    _guard_admin(email)
+    oracle_path = get_oracle_file_path()
+    return FileResponse(path=oracle_path, filename='Oracle.xlsx', media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 @router.post('/upload/she')
 async def upload_she_sheet(email: str = Form(...), file: UploadFile = File(...)) -> dict:
     _guard_admin(email)
@@ -90,6 +99,32 @@ async def upload_she_sheet(email: str = Form(...), file: UploadFile = File(...))
 
     try:
         replace_she_file(tmp_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'Invalid or unreadable Excel file: {exc}') from exc
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    return {'success': True}
+
+
+@router.post('/upload/oracle')
+async def upload_oracle_sheet(email: str = Form(...), file: UploadFile = File(...)) -> dict:
+    _guard_admin(email)
+
+    filename = (file.filename or '').lower()
+    if not filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail='Please upload a .xlsx file.')
+
+    with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+
+    try:
+        replace_oracle_file(tmp_path)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f'Invalid or unreadable Excel file: {exc}') from exc
     finally:

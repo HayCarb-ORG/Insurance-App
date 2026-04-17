@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Toast } from './components/common/Toast'
 import { HeaderBar } from './components/layout/HeaderBar'
 import { AddDependantPage } from './pages/AddDependantPage'
@@ -11,6 +11,12 @@ import { ViewDependantPage } from './pages/ViewDependantPage'
 import type { UserSession } from './types/models'
 
 type ToastVariant = 'success' | 'error' | 'info'
+const ONLY_ADMIN_EMAIL = 'msp@haycarb.com'
+
+const normalizeSession = (rawSession: UserSession): UserSession => ({
+  ...rawSession,
+  isAdmin: rawSession.email.toLowerCase() === ONLY_ADMIN_EMAIL && rawSession.isAdmin,
+})
 
 const ProtectedLayout = ({
   session,
@@ -49,11 +55,13 @@ const ProtectedRoute = ({
 function App() {
   const [session, setSession] = useState<UserSession | null>(null)
   const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null)
+  const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter
 
   useEffect(() => {
     const storedSession = localStorage.getItem('insurance-session')
     if (storedSession) {
-      setSession(JSON.parse(storedSession) as UserSession)
+      const parsed = JSON.parse(storedSession) as UserSession
+      setSession(normalizeSession(parsed))
     }
   }, [])
 
@@ -70,8 +78,9 @@ function App() {
   const actions = useMemo(
     () => ({
       onLogin: (nextSession: UserSession) => {
-        setSession(nextSession)
-        localStorage.setItem('insurance-session', JSON.stringify(nextSession))
+        const normalized = normalizeSession(nextSession)
+        setSession(normalized)
+        localStorage.setItem('insurance-session', JSON.stringify(normalized))
       },
       onLogout: () => {
         setSession(null)
@@ -85,7 +94,7 @@ function App() {
   return (
     <div className="app-background min-h-screen">
       {toast ? <Toast message={toast.message} variant={toast.variant} /> : null}
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route
             path="/"
@@ -138,7 +147,7 @@ function App() {
             }
           />
         </Routes>
-      </BrowserRouter>
+      </Router>
     </div>
   )
 }

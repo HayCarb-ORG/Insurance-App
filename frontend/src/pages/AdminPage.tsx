@@ -5,10 +5,12 @@ import { Spinner } from '../components/common/Spinner'
 import {
   clearAdminNotes,
   deleteAdminNote,
+  downloadOracleSheet,
   downloadSheSheet,
   getAdminNotes,
   getSheetPreview,
   updateAdminNote,
+  uploadOracleSheet,
   uploadSheSheet,
 } from '../services/api'
 import type { AdminNote, SheetPreview, UserSession } from '../types/models'
@@ -27,6 +29,8 @@ export const AdminPage = ({ session, onNotify }: AdminPageProps) => {
   const [workingNoteId, setWorkingNoteId] = useState<string | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [oracleUploadFile, setOracleUploadFile] = useState<File | null>(null)
+  const [oracleUploading, setOracleUploading] = useState(false)
 
   const parsePayload = (payloadJson?: string): Record<string, unknown> => {
     if (!payloadJson) return {}
@@ -122,6 +126,41 @@ export const AdminPage = ({ session, onNotify }: AdminPageProps) => {
       onNotify(message, 'error')
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleOracleDownload = async () => {
+    try {
+      const blob = await downloadOracleSheet(session.email)
+      const url = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'Oracle.xlsx'
+      anchor.click()
+      window.URL.revokeObjectURL(url)
+      onNotify('Oracle sheet download started.', 'success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download failed.'
+      onNotify(message, 'error')
+    }
+  }
+
+  const handleOracleUpload = async () => {
+    if (!oracleUploadFile) {
+      onNotify('Please choose Oracle.xlsx first.', 'error')
+      return
+    }
+
+    setOracleUploading(true)
+    try {
+      await uploadOracleSheet(session.email, oracleUploadFile)
+      onNotify('Latest Oracle sheet uploaded successfully. New users can login immediately.', 'success')
+      setOracleUploadFile(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload failed.'
+      onNotify(message, 'error')
+    } finally {
+      setOracleUploading(false)
     }
   }
 
@@ -281,6 +320,27 @@ export const AdminPage = ({ session, onNotify }: AdminPageProps) => {
             </table>
           </div>
         )}
+      </GlassCard>
+
+      <GlassCard className="p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-semibold text-white">Oracle Login Sheet</h2>
+          <Button onClick={handleOracleDownload}>Download Oracle.xlsx</Button>
+        </div>
+        <p className="mb-4 text-sm text-white/80">
+          Upload Oracle.xlsx to update employee email and NIC mapping used during login.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/20 bg-black/35 p-3">
+          <input
+            type="file"
+            accept=".xlsx"
+            onChange={(event) => setOracleUploadFile(event.target.files?.[0] ?? null)}
+            className="text-sm text-white file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600/85 file:px-3 file:py-2 file:text-white"
+          />
+          <Button onClick={handleOracleUpload} disabled={oracleUploading || !oracleUploadFile}>
+            {oracleUploading ? <Spinner /> : 'Upload Latest Oracle.xlsx'}
+          </Button>
+        </div>
       </GlassCard>
     </div>
   )

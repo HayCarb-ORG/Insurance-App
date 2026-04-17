@@ -1,17 +1,57 @@
 {
   "name": "insurance-app-desktop",
   "version": "1.0.0",
+  "description": "Insurance desktop application packaged with Electron",
+  "author": "Haycarb IT",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k -n FRONTEND,BACKEND,ELECTRON -c cyan,green,magenta \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:electron\"",
     "dev:frontend": "npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173",
     "dev:backend": "py -3.11 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --app-dir backend",
-    "dev:electron": "wait-on tcp:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 npm --prefix electron run dev",
-    "build:frontend": "npm --prefix frontend run build"
+    "dev:electron": "wait-on tcp:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 electron .",
+    "build:frontend": "npm --prefix frontend run build",
+    "react-build": "npm --prefix frontend run build",
+    "electron-dev": "concurrently -k -n FRONTEND,ELECTRON -c cyan,magenta \"npm run dev:frontend\" \"npm run dev:electron\"",
+    "electron-build": "npm run react-build && electron-builder --win nsis"
   },
   "devDependencies": {
+    "electron": "^36.3.2",
+    "electron-builder": "^25.1.8",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.haycarb.insuranceapp",
+    "productName": "InsuranceApp",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName} Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "InsuranceApp"
+    }
   }
 }

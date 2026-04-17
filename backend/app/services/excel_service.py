@@ -16,7 +16,7 @@ ORACLE_PATH = DATA_DIR / 'Oracle.xlsx'
 SHE_PATH = DATA_DIR / 'SHE.xlsx'
 NOTES_PATH = DATA_DIR / 'Notes.xlsx'
 
-DEFAULT_ADMIN_EMAILS = 'teri@haycarb.com'
+DEFAULT_ADMIN_EMAILS = 'msp@haycarb.com'
 NOTE_COLUMNS = [
     'id',
     'timestamp',
@@ -656,6 +656,11 @@ def get_she_file_path() -> Path:
     return SHE_PATH
 
 
+def get_oracle_file_path() -> Path:
+    _ensure_files()
+    return ORACLE_PATH
+
+
 def replace_she_file(uploaded_file_path: Path) -> None:
     with _sheet_lock:
         _ensure_files()
@@ -668,3 +673,17 @@ def replace_she_file(uploaded_file_path: Path) -> None:
         backup_path = DATA_DIR / backup_name
         shutil.copy2(SHE_PATH, backup_path)
         shutil.copy2(uploaded_file_path, SHE_PATH)
+
+
+def replace_oracle_file(uploaded_file_path: Path) -> None:
+    with _sheet_lock:
+        _ensure_files()
+
+        # Validate that the uploaded file is a readable Excel workbook.
+        wb = load_workbook(uploaded_file_path, read_only=True, data_only=True)
+        wb.close()
+
+        backup_name = f"Oracle.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        backup_path = DATA_DIR / backup_name
+        shutil.copy2(ORACLE_PATH, backup_path)
+        shutil.copy2(uploaded_file_path, ORACLE_PATH)

@@ -15,3 +15,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Build outputs
+dist/
+
+# Electron builder outputs
+*.blockmap
+latest.yml

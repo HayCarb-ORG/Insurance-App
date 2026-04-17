@@ -5,7 +5,9 @@ import { GlassCard } from '../components/common/GlassCard'
 import { InputField } from '../components/common/InputField'
 import { Spinner } from '../components/common/Spinner'
 import { getSheByNic, updateRecord } from '../services/api'
-import type { SheRecord, UserSession } from '../types/models'
+import type { DependantRelation, SheRecord, UserSession } from '../types/models'
+
+const dependantRelations: DependantRelation[] = ['Spouse', 'Son', 'Daughter']
 
 interface ViewDependantPageProps {
   session: UserSession
@@ -45,12 +47,13 @@ export const ViewDependantPage = ({ session, onNotify }: ViewDependantPageProps)
   const save = async () => {
     if (!dependant) return
 
+    const relation = dependantRelations.find((item) => item === dependant.relation)
+
     setSaving(true)
     try {
       await updateRecord(dependant.id, {
         name: dependant.name,
-        nic: dependant.nic,
-        relation: dependant.relation,
+        relation,
         dob: dependant.dob,
         gender: dependant.gender,
         userEmail: session.email,
