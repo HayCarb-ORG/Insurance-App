@@ -89,7 +89,11 @@ function App() {
           <Route
             path="/"
             element={
-              <LoginPage onLogin={actions.onLogin} onNotify={notify} />
+              session ? (
+                <Navigate to={session.isAdmin ? '/admin' : '/dashboard'} replace />
+              ) : (
+                <LoginPage onLogin={actions.onLogin} onNotify={notify} />
+              )
             }
           />
           <Route
