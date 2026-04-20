@@ -57,14 +57,6 @@ function App() {
   const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null)
   const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter
 
-  useEffect(() => {
-    const storedSession = localStorage.getItem('insurance-session')
-    if (storedSession) {
-      const parsed = JSON.parse(storedSession) as UserSession
-      setSession(normalizeSession(parsed))
-    }
-  }, [])
-
   const notify = (message: string, variant: ToastVariant = 'info') => {
     setToast({ message, variant })
   }
@@ -80,11 +72,9 @@ function App() {
       onLogin: (nextSession: UserSession) => {
         const normalized = normalizeSession(nextSession)
         setSession(normalized)
-        localStorage.setItem('insurance-session', JSON.stringify(normalized))
       },
       onLogout: () => {
         setSession(null)
-        localStorage.removeItem('insurance-session')
         notify('Logged out.', 'info')
       },
     }),
@@ -99,11 +89,7 @@ function App() {
           <Route
             path="/"
             element={
-              session ? (
-                <Navigate to="/dashboard" replace />
-              ) : (
-                <LoginPage onLogin={actions.onLogin} onNotify={notify} />
-              )
+              <LoginPage onLogin={actions.onLogin} onNotify={notify} />
             }
           />
           <Route
