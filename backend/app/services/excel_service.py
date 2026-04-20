@@ -164,6 +164,69 @@ def _detect_she_layout(ws) -> str:
     return 'real'
 
 
+def _normalize_header_label(value: object) -> str:
+    return re.sub(r'[^a-z0-9]+', '', _safe(value).lower())
+
+
+def _detect_real_column_map(ws) -> dict[str, int]:
+    defaults = {
+        'nic': 1,
+        'name': 2,
+        'dob': 3,
+        'gender': 4,
+        'relation': 5,
+        'category': 6,
+        'effectiveDate': 7,
+        'grade': 8,
+        'totalPremium': 13,
+        'employeeVoluntaryEnhanceLimit': 19,
+        'note': 27,
+    }
+    aliases = {
+        'nic': {'nic', 'nicnumber', 'nicno', 'nationalid'},
+        'name': {'name', 'employeename', 'membername', 'fullname'},
+        'dob': {'dob', 'dateofbirth', 'birthdate'},
+        'gender': {'gender', 'sex'},
+        'relation': {'relation', 'relationship'},
+        'category': {'category'},
+        'effectiveDate': {'effectivedate', 'effective'},
+        'grade': {'grade'},
+        'totalPremium': {'totalpremium', 'totprem', 'premium'},
+        'employeeVoluntaryEnhanceLimit': {
+            'employeevoluntaryenhancelimit',
+            'voluntaryenhancelimit',
+            'totalenhancelimit',
+            'enhancelimit',
+        },
+        'note': {'note', 'remarks', 'comment', 'comments'},
+    }
+
+    best_row: tuple[object, ...] | None = None
+    best_score = 0
+    for row in ws.iter_rows(min_row=1, max_row=20, values_only=True):
+        labels = {_normalize_header_label(cell) for cell in row if _safe(cell)}
+        score = 0
+        for key_aliases in aliases.values():
+            if any(label in key_aliases for label in labels):
+                score += 1
+        if score > best_score:
+            best_score = score
+            best_row = row
+
+    if not best_row:
+        return defaults
+
+    detected = defaults.copy()
+    for col_idx, cell in enumerate(best_row, start=1):
+        label = _normalize_header_label(cell)
+        for key, key_aliases in aliases.items():
+            if label in key_aliases:
+                detected[key] = col_idx
+                break
+
+    return detected
+
+
 def _build_record_from_seeded(row_idx: int, row: tuple[object, ...]) -> dict | None:
     record_id = _safe(row[0]) if len(row) > 0 else ''
     nic = _safe(row[2]) if len(row) > 2 else ''
@@ -186,24 +249,31 @@ def _build_record_from_seeded(row_idx: int, row: tuple[object, ...]) -> dict | N
     }
 
 
-def _build_record_from_real(row_idx: int, row: tuple[object, ...]) -> dict | None:
-    nic = _safe(row[0]) if len(row) > 0 else ''
+def _build_record_from_real(row_idx: int, row: tuple[object, ...], column_map: dict[str, int]) -> dict | None:
+    def from_col(key: str) -> object:
+        col = column_map.get(key, 0)
+        idx = col - 1
+        if idx < 0 or idx >= len(row):
+            return None
+        return row[idx]
+
+    nic = _safe(from_col('nic'))
     if not _is_nic(nic):
         return None
 
     return {
         'id': f'she-{row_idx}',
-        'name': _safe(row[1]) if len(row) > 1 else '',
+        'name': _safe(from_col('name')),
         'nic': nic,
-        'dob': _normalize_date(row[2]) if len(row) > 2 else '',
-        'gender': _normalize_gender(row[3]) if len(row) > 3 else 'Other',
-        'relation': _safe(row[4]) if len(row) > 4 else '',
-        'category': _safe(row[5]) if len(row) > 5 else '',
-        'effectiveDate': _normalize_date(row[6]) if len(row) > 6 else '',
-        'grade': _safe(row[7]) if len(row) > 7 else '',
-        'totalPremium': _to_number(row[12]) if len(row) > 12 else 0.0,
-        'employeeVoluntaryEnhanceLimit': _to_number(row[18]) if len(row) > 18 else 0.0,
-        'note': _safe(row[26]) if len(row) > 26 else '',
+        'dob': _normalize_date(from_col('dob')),
+        'gender': _normalize_gender(from_col('gender')),
+        'relation': _safe(from_col('relation')),
+        'category': _safe(from_col('category')),
+        'effectiveDate': _normalize_date(from_col('effectiveDate')),
+        'grade': _safe(from_col('grade')),
+        'totalPremium': _to_number(from_col('totalPremium')),
+        'employeeVoluntaryEnhanceLimit': _to_number(from_col('employeeVoluntaryEnhanceLimit')),
+        'note': _safe(from_col('note')),
     }
 
 
@@ -233,6 +303,7 @@ def get_records_by_nic(nic: str) -> list[dict]:
     wb = load_workbook(SHE_PATH, read_only=True, data_only=True)
     ws = wb.active
     layout = _detect_she_layout(ws)
+    real_column_map = _detect_real_column_map(ws) if layout == 'real' else {}
 
     records: list[dict] = []
     target_nic = nic.strip().lower()
@@ -240,7 +311,7 @@ def get_records_by_nic(nic: str) -> list[dict]:
         if layout == 'seeded':
             record = _build_record_from_seeded(row_idx, row)
         else:
-            record = _build_record_from_real(row_idx, row)
+            record = _build_record_from_real(row_idx, row, real_column_map)
 
         if record and record['nic'].lower() == target_nic:
             records.append(record)
@@ -288,17 +359,34 @@ def create_dependant(payload: dict) -> str:
             ws.cell(row=new_row_index, column=12, value=payload.get('note', ''))
             record_id = f'row-{new_row_index - 1}'
         else:
-            ws.cell(row=new_row_index, column=1, value=payload['nic'])
-            ws.cell(row=new_row_index, column=2, value=payload['name'])
-            ws.cell(row=new_row_index, column=3, value=payload['dob'])
-            ws.cell(row=new_row_index, column=4, value=payload['gender'])
-            ws.cell(row=new_row_index, column=5, value=payload['relation'])
-            ws.cell(row=new_row_index, column=6, value=payload.get('category', 'Dependant'))
-            ws.cell(row=new_row_index, column=7, value=payload.get('effectiveDate', ''))
-            ws.cell(row=new_row_index, column=8, value=payload.get('grade', ''))
-            ws.cell(row=new_row_index, column=13, value=payload.get('totalPremium', 0))
-            ws.cell(row=new_row_index, column=19, value=payload.get('employeeVoluntaryEnhanceLimit', 0))
-            ws.cell(row=new_row_index, column=27, value=payload.get('note', ''))
+            real_map = _detect_real_column_map(ws)
+            ws.cell(row=new_row_index, column=real_map.get('nic', 1), value=payload['nic'])
+            ws.cell(row=new_row_index, column=real_map.get('name', 2), value=payload['name'])
+            ws.cell(row=new_row_index, column=real_map.get('dob', 3), value=payload['dob'])
+            ws.cell(row=new_row_index, column=real_map.get('gender', 4), value=payload['gender'])
+            ws.cell(row=new_row_index, column=real_map.get('relation', 5), value=payload['relation'])
+            ws.cell(
+                row=new_row_index,
+                column=real_map.get('category', 6),
+                value=payload.get('category', 'Dependant'),
+            )
+            ws.cell(
+                row=new_row_index,
+                column=real_map.get('effectiveDate', 7),
+                value=payload.get('effectiveDate', ''),
+            )
+            ws.cell(row=new_row_index, column=real_map.get('grade', 8), value=payload.get('grade', ''))
+            ws.cell(
+                row=new_row_index,
+                column=real_map.get('totalPremium', 13),
+                value=payload.get('totalPremium', 0),
+            )
+            ws.cell(
+                row=new_row_index,
+                column=real_map.get('employeeVoluntaryEnhanceLimit', 19),
+                value=payload.get('employeeVoluntaryEnhanceLimit', 0),
+            )
+            ws.cell(row=new_row_index, column=real_map.get('note', 27), value=payload.get('note', ''))
             record_id = f'she-{new_row_index}'
 
         wb.save(SHE_PATH)
@@ -348,19 +436,7 @@ def update_record(record_id: str, payload: dict) -> bool:
             'employeeVoluntaryEnhanceLimit': 11,
             'note': 12,
         }
-        real_map = {
-            'nic': 1,
-            'name': 2,
-            'dob': 3,
-            'gender': 4,
-            'relation': 5,
-            'category': 6,
-            'effectiveDate': 7,
-            'grade': 8,
-            'totalPremium': 13,
-            'employeeVoluntaryEnhanceLimit': 19,
-            'note': 27,
-        }
+        real_map = _detect_real_column_map(ws)
 
         key_map = seeded_map if layout == 'seeded' else real_map
         for key, value in payload.items():
@@ -548,9 +624,15 @@ def _append_note_to_employee_record(nic: str, message: str, admin_comment: str =
     ws = wb.active
     layout = _detect_she_layout(ws)
 
-    relation_column = 6 if layout == 'seeded' else 5
-    nic_column = 3 if layout == 'seeded' else 1
-    note_column = 11 if layout == 'seeded' else 27
+    if layout == 'seeded':
+        relation_column = 6
+        nic_column = 3
+        note_column = 11
+    else:
+        real_map = _detect_real_column_map(ws)
+        relation_column = real_map.get('relation', 5)
+        nic_column = real_map.get('nic', 1)
+        note_column = real_map.get('note', 27)
 
     target_row = None
     for row_idx in range(1, ws.max_row + 1):
