@@ -19,6 +19,7 @@ from app.services.excel_service import (
 )
 
 router = APIRouter(prefix='/api/admin', tags=['admin'])
+ALLOWED_EXCEL_EXTENSIONS = ('.xlsx', '.xls', '.xlsm', '.xlsb')
 
 
 def _guard_admin(email: str) -> None:
@@ -89,8 +90,8 @@ async def upload_she_sheet(email: str = Form(...), file: UploadFile = File(...))
     _guard_admin(email)
 
     filename = (file.filename or '').lower()
-    if not filename.endswith('.xlsx'):
-        raise HTTPException(status_code=400, detail='Please upload a .xlsx file.')
+    if not filename.endswith(ALLOWED_EXCEL_EXTENSIONS):
+        raise HTTPException(status_code=400, detail='Please upload an Excel file (.xlsx, .xls, .xlsm, .xlsb).')
 
     with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
         content = await file.read()
@@ -115,8 +116,8 @@ async def upload_oracle_sheet(email: str = Form(...), file: UploadFile = File(..
     _guard_admin(email)
 
     filename = (file.filename or '').lower()
-    if not filename.endswith('.xlsx'):
-        raise HTTPException(status_code=400, detail='Please upload a .xlsx file.')
+    if not filename.endswith(ALLOWED_EXCEL_EXTENSIONS):
+        raise HTTPException(status_code=400, detail='Please upload an Excel file (.xlsx, .xls, .xlsm, .xlsb).')
 
     with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
         content = await file.read()

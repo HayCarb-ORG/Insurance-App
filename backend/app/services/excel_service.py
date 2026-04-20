@@ -6,9 +6,17 @@ import os
 from pathlib import Path
 import re
 import shutil
+from tempfile import NamedTemporaryFile
 import threading
 
+import pandas as pd
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+try:
+    import olefile
+except ImportError:  # pragma: no cover
+    olefile = None
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT_DIR / 'data'
@@ -630,22 +638,37 @@ def get_sheet_preview(limit: int = 200) -> dict:
     wb = load_workbook(SHE_PATH, read_only=True, data_only=True)
     ws = wb.active
 
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
+    # Some SHE files include banner rows before column headers.
+    header_row_index = 1
+    for idx, row in enumerate(ws.iter_rows(min_row=1, max_row=30, values_only=True), start=1):
+        if any(_safe(value) for value in row):
+            header_row_index = idx
+            break
+
+    row_stream = ws.iter_rows(min_row=header_row_index, values_only=True)
+    header_row = next(row_stream, None)
+    if header_row is None:
         wb.close()
         return {'headers': [], 'rows': []}
 
-    header_row = rows[0]
+    detected_columns = max(
+        (col_idx for col_idx, cell in enumerate(header_row, start=1) if _safe(cell)),
+        default=0,
+    )
+    column_count = min(max(detected_columns, 1), 120)
+
     headers: list[str] = []
-    for idx, cell in enumerate(header_row, start=1):
-        label = _safe(cell)
+    for idx in range(1, column_count + 1):
+        label = _safe(header_row[idx - 1]) if idx - 1 < len(header_row) else ''
         headers.append(label if label else f'Column {idx}')
 
     data_rows: list[list[str]] = []
-    for row in rows[1 : limit + 1]:
-        rendered = [_safe(value) for value in row]
+    for row in row_stream:
+        rendered = [_safe(row[idx]) if idx < len(row) else '' for idx in range(column_count)]
         if any(rendered):
             data_rows.append(rendered)
+        if len(data_rows) >= limit:
+            break
 
     wb.close()
     return {'headers': headers, 'rows': data_rows}
@@ -661,29 +684,105 @@ def get_oracle_file_path() -> Path:
     return ORACLE_PATH
 
 
+def _validate_uploaded_workbook(uploaded_file_path: Path) -> None:
+    last_error: Exception | None = None
+
+    # Some enterprise-generated workbooks fail in read_only mode but load
+    # correctly in normal mode. Accept either mode as valid.
+    for read_only in (True, False):
+        try:
+            wb = load_workbook(uploaded_file_path, read_only=read_only, data_only=True)
+            if not wb.sheetnames:
+                wb.close()
+                raise ValueError('Workbook has no sheets.')
+            wb.close()
+            return
+        except Exception as exc:  # pragma: no cover - best-effort compatibility
+            last_error = exc
+
+    detail = str(last_error) if last_error else 'Unknown workbook parsing error.'
+    raise ValueError(
+        f'Workbook cannot be parsed by the server ({detail}). '
+        'Please ensure the file is a standard .xlsx and not password-protected.'
+    )
+
+
+def _normalize_uploaded_workbook(uploaded_file_path: Path) -> Path:
+    try:
+        _validate_uploaded_workbook(uploaded_file_path)
+        return uploaded_file_path
+    except ValueError as exc:
+        parse_error = str(exc)
+
+    # Office-encrypted workbooks expose an OLE container with EncryptedPackage.
+    if olefile and olefile.isOleFile(str(uploaded_file_path)):
+        try:
+            ole = olefile.OleFileIO(str(uploaded_file_path))
+            stream_names = {'/'.join(entry) for entry in ole.listdir()}
+            ole.close()
+            if 'EncryptedPackage' in stream_names:
+                raise ValueError(
+                    'Workbook is encrypted/protected (IRM or password-protected). '
+                    'Please open it in Excel, remove protection, and Save As a normal .xlsx file before uploading.'
+                )
+        except OSError:
+            pass
+
+    # Fallback for legacy/non-zip excel sources by converting to plain .xlsx values.
+    try:
+        with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            normalized_path = Path(tmp.name)
+
+        sheets = pd.read_excel(uploaded_file_path, sheet_name=None, header=None, dtype=object)
+        wb = Workbook()
+        default_ws = wb.active
+        wb.remove(default_ws)
+
+        for index, (sheet_name, frame) in enumerate(sheets.items(), start=1):
+            ws = wb.create_sheet(title=(sheet_name or f'Sheet{index}')[:31])
+            safe_frame = frame.where(pd.notna(frame), None)
+            for row in dataframe_to_rows(safe_frame, index=False, header=False):
+                ws.append(row)
+
+        if not wb.sheetnames:
+            wb.create_sheet(title='Sheet1')
+
+        wb.save(normalized_path)
+        wb.close()
+        _validate_uploaded_workbook(normalized_path)
+        return normalized_path
+    except Exception as fallback_error:
+        raise ValueError(
+            'Workbook cannot be parsed by the server '
+            f'({parse_error}). Legacy conversion also failed ({fallback_error}).'
+        ) from fallback_error
+
+
 def replace_she_file(uploaded_file_path: Path) -> None:
     with _sheet_lock:
         _ensure_files()
 
-        # Validate that the uploaded file is a readable Excel workbook.
-        wb = load_workbook(uploaded_file_path, read_only=True, data_only=True)
-        wb.close()
+        normalized_path = _normalize_uploaded_workbook(uploaded_file_path)
 
         backup_name = f"SHE.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         backup_path = DATA_DIR / backup_name
         shutil.copy2(SHE_PATH, backup_path)
-        shutil.copy2(uploaded_file_path, SHE_PATH)
+        shutil.copy2(normalized_path, SHE_PATH)
+
+        if normalized_path != uploaded_file_path:
+            normalized_path.unlink(missing_ok=True)
 
 
 def replace_oracle_file(uploaded_file_path: Path) -> None:
     with _sheet_lock:
         _ensure_files()
 
-        # Validate that the uploaded file is a readable Excel workbook.
-        wb = load_workbook(uploaded_file_path, read_only=True, data_only=True)
-        wb.close()
+        normalized_path = _normalize_uploaded_workbook(uploaded_file_path)
 
         backup_name = f"Oracle.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         backup_path = DATA_DIR / backup_name
         shutil.copy2(ORACLE_PATH, backup_path)
-        shutil.copy2(uploaded_file_path, ORACLE_PATH)
+        shutil.copy2(normalized_path, ORACLE_PATH)
+
+        if normalized_path != uploaded_file_path:
+            normalized_path.unlink(missing_ok=True)
